@@ -17,48 +17,41 @@ import matplotlib.pyplot as plt
 pars = {}
 pars['location']        = 'pakistan'
 pars['pop_type']        = 'hybrid'
-pars['pop_size']        = 10e3      # Small pop
-pars['beta']            = 0.032     # Double
-pars['dur']     = {'exp2inf': {'dist': 'uniform', 'par1': 1.0, 'par2': 1.0},
-                   'inf2sym': {'dist': 'lognormal_int', 'par1': 9.0, 'par2': 4.0},
+pars['pop_size']        = 50e3      # Small pop
+pars['beta']            = 0.232     # Double
+pars['dur']     = {'exp2inf': {'dist': 'uniform', 'par1': 1.0, 'par2': 1.0},            # Assume shedding starts day after infection
+                   'inf2sym': {'dist': 'lognormal_int', 'par1': 9.0, 'par2': 4.0},      # Assume symptoms occur ~10 days after infection
                    'sym2sev': {'dist': 'lognormal_int', 'par1': 6.6, 'par2': 4.9},
                    'sev2crit': {'dist': 'lognormal_int', 'par1': 3.0, 'par2': 7.4},
-                   'asym2rec': {'dist': 'lognormal_int', 'par1': 8.0, 'par2': 2.0},
-                   'mild2rec': {'dist': 'lognormal_int', 'par1': 8.0, 'par2': 2.0},
+                   'asym2rec': {'dist': 'lognormal_int', 'par1': 50.0, 'par2': 400.0},  # HUGE boost assuming infections are immunologically naive
+                   'mild2rec': {'dist': 'lognormal_int', 'par1': 50.0, 'par2': 400.0},  # HUGE boost assuming infections are immunologically naive
                    'sev2rec': {'dist': 'lognormal_int', 'par1': 14.0, 'par2': 2.4},
                    'crit2rec': {'dist': 'lognormal_int', 'par1': 14.0, 'par2': 2.4},
                    'crit2die': {'dist': 'lognormal_int', 'par1': 6.2, 'par2': 1.7}}
-prognoses = cv.get_prognoses()
-prognoses['sus_ORs']    = np.array([1.00,  1.00, 1.00, 1.00, 1.00, 1.00, 1.0, 1.0, 1.0, 1.0])
-prognoses['symp_probs'] = np.array([0.005 , 0.0, 0.0, 0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0])
+prognoses               = cv.get_prognoses()
+prognoses['sus_ORs']    = np.array([1.00,  1.00, 1.00, 1.00, 1.00, 1.00, 1.0, 1.0, 1.0, 1.0]) # Equally susceptible
+prognoses['symp_probs'] = np.array([0.905, 0.0, 0.0, 0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0])     # Equally susceptible
+prognoses['severe_probs'] = np.array([0.0 , 0.0, 0.0, 0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0])    # Zero'd out
+prognoses['crit_probs'] = np.array([0.0 , 0.0, 0.0, 0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0])      # Zero'd out
+prognoses['death_probs'] = np.array([0.0 , 0.0, 0.0, 0.0, 0.0 , 0.0, 0.0, 0.0, 0.0, 0.0])     # Zero'd out
 pars['prognoses']       = prognoses
 pars['start_day']       = '2020-01-01'
 pars['n_days']          = 60
-pars['quar_period']     = 14
+pars['quar_period']     = 140
 sim                     = cv.Sim(pars=pars)  # Setup sim
+sim.initialize()
 people                  = cv.make_people(sim)  # Make the actual people for the simulation
-over5_indx              = people['age'] >= 5  # Find over 5's
-under5_indx             = people['age'] < 5  # Find under 5's
+inds_o5                 = sc.findinds(people.age>=10)
+people.rel_sus[inds_o5] = 0
+inds_u5                 = sc.findinds(people.age<10)
 imm_frac                = 0.8
-under5_imm_indx         = list(under5_indx) and list(np.random.uniform(low=0.0, high=1.0, size=len(under5_indx)) < imm_frac) # Randomly determine immunity for each individual
-people['recovered'][over5_indx] = True  # Make anyone over 5 recovered
-people['recovered'][under5_imm_indx] = True  # Make anyone over 5 recovered
-unique, counts = np.unique(people['recovered'], return_counts=True)  # tabulate number of recovereds
-print(np.asarray((unique, counts)).T)
-# sim = cv.Sim(pars = pars, popfile=people, load_pop=True)
-# sim.people = people
-# unique, counts = np.unique(sim.people['recovered'], return_counts=True)
-# print(np.asarray((unique, counts)).T)
+inds_u5imm              = inds_u5[sc.findinds(np.random.uniform(low=0.0, high=1.0, size=len(inds_u5)) < imm_frac)]
+people.rel_sus[inds_u5imm] = 0
+sim.people              = people
+# sim['interventions'] = [cv.test_prob(symp_prob=1.00, asymp_prob=0.00)] # Test 100% of symptomatics and 0% of asymptomatics
+sim['interventions'] = [cv.test_prob(symp_prob=1.00, asymp_prob=0.00), cv.contact_tracing()]
 sim.run()
 sim.plot()
-sim.results.keys()
-sim.results.r_eff
-print(np.mean(sim.results.r_eff.values[sim.results.r_eff.values > 0]))  # Reff ~0.39; ignore zero values if disease goes extinct
-
-
-
-
-
 
 
 
@@ -93,6 +86,41 @@ print(np.mean(sim.results.r_eff.values[sim.results.r_eff.values > 0]))  # Reff ~
 
 
 
+list1 = ['a']
+list2 = list1
+print('1', list1)
+print('2', list2)
+list1.append('b')
+print('1', list1)
+print('2', list2)
+list3 = sc.dcp(list1)
+list1.append('c')
+list3.append('d')
+print('1', list1)
+print('2', list2)
+print('3', list3)
+
+
+
+
+
+over5_indx              = people['age'] >= 5  # Find over 5's
+under5_indx             = people['age'] < 5  # Find under 5's
+imm_frac                = 0.8
+under5_imm_indx         = list(under5_indx) and list(np.random.uniform(low=0.0, high=1.0, size=len(under5_indx)) < imm_frac) # Randomly determine immunity for each individual
+people['recovered'][over5_indx] = True  # Make anyone over 5 recovered
+people['recovered'][under5_imm_indx] = True  # Make anyone over 5 recovered
+unique, counts = np.unique(people['recovered'], return_counts=True)  # tabulate number of recovereds
+print(np.asarray((unique, counts)).T)
+# sim = cv.Sim(pars = pars, popfile=people, load_pop=True)
+# sim.people = people
+# unique, counts = np.unique(sim.people['recovered'], return_counts=True)
+# print(np.asarray((unique, counts)).T)
+sim.run()
+sim.plot()
+sim.results.keys()
+sim.results.r_eff
+print(np.mean(sim.results.r_eff.values[sim.results.r_eff.values > 0]))  # Reff ~0.39; ignore zero values if disease goes extinct
 
 
 
@@ -101,14 +129,14 @@ print(np.mean(sim.results.r_eff.values[sim.results.r_eff.values > 0]))  # Reff ~
 
 
 
-par1 = 9.0
-par2 = 4.0
+par1 = 50.0
+par2 = 400.0
 size = 1000
 mean  = np.log(par1**2 / np.sqrt(par2 + par1**2)) # Computes the mean of the underlying normal distribution
 sigma = np.sqrt(np.log(par2/par1**2 + 1)) # Computes sigma for the underlying normal distribution
 samples = np.random.lognormal(mean=mean, sigma=sigma, size=size)
 samples = np.round(samples)
-plt.hist(samples, bins=30)  # `density=False` would make counts
+plt.hist(samples, bins=75)  # `density=False` would make counts
 
 
 np.random.uniform(low=1.0, high=1.0, size=size)
